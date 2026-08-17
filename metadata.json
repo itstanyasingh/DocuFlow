@@ -1,0 +1,6 @@
+{
+  "name": "DocuFlow",
+  "description": "All-in-one online document, PDF, image, and OCR processing platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
