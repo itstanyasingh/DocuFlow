@@ -14,6 +14,9 @@ import { TextDataToolsView } from './components/TextDataToolsView';
 import { PricingView } from './components/PricingView';
 import { DashboardView } from './components/DashboardView';
 import { AdminView } from './components/AdminView';
+import { SupportedFormatsView } from './components/SupportedFormatsView';
+import { HelpCenterView } from './components/HelpCenterView';
+import { MyToolsView } from './components/MyToolsView';
 
 import { ToolDefinition, ProcessedResult, FileItem } from './types';
 import { TOOLS } from './data/tools';
@@ -209,6 +212,23 @@ export function App() {
             <PricingView onBackToHome={() => handleNavTabSelect('all')} />
           )}
 
+          {activeView === 'home' && activeNavTab === 'supported-formats' && (
+            <SupportedFormatsView onBackToHome={() => handleNavTabSelect('all')} />
+          )}
+
+          {activeView === 'home' && activeNavTab === 'help' && (
+            <HelpCenterView onBackToHome={() => handleNavTabSelect('all')} />
+          )}
+
+          {activeView === 'home' && activeNavTab === 'my-tools' && (
+            <MyToolsView
+              favorites={favorites}
+              onToggleFavorite={handleToggleFavorite}
+              onSelectTool={handleSelectTool}
+              onBackToHome={() => handleNavTabSelect('all')}
+            />
+          )}
+
           {activeView === 'home' && activeNavTab === 'dashboard' && (
             <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <DashboardView
@@ -229,11 +249,13 @@ export function App() {
           )}
 
           {/* B. Main Home / Category Filtered View */}
-          {activeView === 'home' && activeNavTab !== 'pricing' && activeNavTab !== 'dashboard' && activeNavTab !== 'admin' && (
+          {activeView === 'home' && !['pricing', 'supported-formats', 'help', 'my-tools', 'dashboard', 'admin'].includes(activeNavTab) && (
             <HomeView
               activeTab={activeNavTab}
               onSelectTool={handleSelectTool}
               openSearch={() => setIsSearchOpen(true)}
+              favorites={favorites}
+              onToggleFavorite={handleToggleFavorite}
             />
           )}
 

@@ -20,6 +20,9 @@ export type MainNavTab =
   | 'file-utilities' 
   | 'pricing' 
   | 'dashboard' 
+  | 'my-tools'
+  | 'supported-formats'
+  | 'help'
   | 'admin';
 
 interface NavbarProps {
@@ -44,7 +47,9 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'ocr', label: 'OCR' },
     { id: 'text-data', label: 'Text & Data' },
     { id: 'file-utilities', label: 'File Utilities' },
-    { id: 'pricing', label: 'Pricing' },
+    { id: 'my-tools', label: 'My Tools' },
+    { id: 'supported-formats', label: 'Formats' },
+    { id: 'help', label: 'Help' },
     { id: 'dashboard', label: 'Dashboard' },
   ];
 

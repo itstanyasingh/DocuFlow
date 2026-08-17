@@ -5,6 +5,7 @@ import {
   Shield,
   Zap,
   Lock,
+  Star,
   FileText,
   FileEdit,
   Split,
@@ -60,6 +61,8 @@ interface HomeViewProps {
   activeTab: MainNavTab;
   onSelectTool: (tool: ToolDefinition, initialFile?: FileItem) => void;
   openSearch: () => void;
+  favorites: string[];
+  onToggleFavorite: (toolId: string) => void;
 }
 
 // Icon mapping helper
@@ -120,6 +123,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
   activeTab,
   onSelectTool,
   openSearch,
+  favorites,
+  onToggleFavorite,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>(() => {
     if (activeTab === 'pdf') return 'pdf';
@@ -145,12 +150,23 @@ export const HomeView: React.FC<HomeViewProps> = ({
     else if (activeTab === 'all') { setSelectedCategory('all'); setActiveSubcategoryFilter('all'); }
   }, [activeTab]);
 
-  // Top popular tools sorted by popularRank
+  // Top 12 Popular tools
+  const popularToolIds = [
+    'pdf-to-word',
+    'word-to-pdf',
+    'merge-pdf',
+    'split-pdf',
+    'compress-pdf',
+    'pdf-to-jpg',
+    'jpg-to-pdf',
+    'pdf-to-excel',
+    'excel-to-pdf',
+    'pdf-ocr',
+    'edit-pdf',
+    'protect-pdf',
+  ];
   const popularTools = useMemo(() => {
-    return TOOLS
-      .filter((t) => t.popularRank !== undefined && t.popularRank > 0)
-      .sort((a, b) => (a.popularRank || 999) - (b.popularRank || 999))
-      .slice(0, 16);
+    return popularToolIds.map(id => TOOLS.find(t => t.id === id)).filter(Boolean) as ToolDefinition[];
   }, []);
 
   // Filtered tools based on search and category
@@ -203,16 +219,15 @@ export const HomeView: React.FC<HomeViewProps> = ({
     <div className="w-full font-sans bg-[#fcfcfb]">
       
       {/* 1. Hero Section */}
-      <section className="border-b border-slate-200 bg-white py-10 sm:py-14 text-center">
+      <section className="border-b border-slate-200 bg-white py-10 sm:py-12 text-center">
         <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
           
-
           <h1 className="text-3xl sm:text-5xl font-extrabold text-slate-900 tracking-tight max-w-3xl mx-auto">
-            Every tool you need to work with files.
+            Work with any file, all in one place.
           </h1>
           
           <p className="mt-3 text-sm sm:text-base text-slate-600 max-w-2xl mx-auto">
-            Convert, organize, edit, compress, scan, and format documents, images, text, and data files instantly.
+            Convert, organize, edit, compress, scan, and manage your documents, images, and files.
           </p>
 
           {/* Search Box */}
@@ -224,7 +239,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search any tool (e.g. PDF to Word, Compress, OCR, QR Code, Merge)..."
+                placeholder="Search tools, e.g. PDF to Word, Compress, Merge..."
                 className="w-full pl-11 pr-10 py-3 bg-slate-50 border border-slate-300 hover:border-slate-400 focus:border-blue-500 rounded-xl text-sm text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all shadow-xs"
               />
               {searchQuery && (
@@ -240,7 +255,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
             {/* Quick Filter Tags */}
             <div className="flex flex-wrap items-center justify-center gap-1.5 mt-3 text-xs text-slate-500">
               <span className="font-semibold text-slate-400">Popular:</span>
-              {['PDF to Word', 'Word to PDF', 'Merge PDF', 'Compress PDF', 'JPG to PDF', 'PDF OCR', 'QR Code'].map((name) => {
+              {['PDF to Word', 'Word to PDF', 'Merge PDF', 'Compress PDF', 'JPG to PDF', 'PDF OCR'].map((name) => {
                 const matched = TOOLS.find((t) => t.name.toLowerCase() === name.toLowerCase());
                 if (!matched) return null;
                 return (
@@ -260,22 +275,30 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 Found {filteredTools.length} {filteredTools.length === 1 ? 'tool' : 'tools'} matching "{searchQuery}"
               </div>
             )}
+
+            {/* Hero Trust Strip */}
+            <div className="mt-6 pt-5 border-t border-slate-100 flex flex-wrap items-center justify-center gap-6 text-xs text-slate-500 font-medium">
+              <span className="flex items-center gap-1.5"><span className="text-green-600 font-bold">✓</span> No software installation</span>
+              <span className="flex items-center gap-1.5"><span className="text-green-600 font-bold">✓</span> 100+ useful tools</span>
+              <span className="flex items-center gap-1.5"><span className="text-green-600 font-bold">✓</span> Works on desktop & mobile</span>
+              <span className="flex items-center gap-1.5"><span className="text-green-600 font-bold">✓</span> Simple file processing</span>
+            </div>
           </div>
 
         </div>
       </section>
 
-      {/* 2. Most Popular Tools (Top 16) */}
+      {/* 2. Most Popular Tools (~12 tools) */}
       {selectedCategory === 'all' && searchQuery === '' && (
-        <section className="py-10 border-b border-slate-200 bg-white">
+        <section className="py-8 border-b border-slate-200 bg-white">
           <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-5">
               <div>
-                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
                   Most Popular Tools
                 </h2>
-                <p className="text-xs text-slate-500 mt-0.5">Everyday essentials used by millions of office workers, students, and businesses</p>
+                <p className="text-xs text-slate-500 mt-0.5">Everyday document and file utilities</p>
               </div>
 
               <a
@@ -287,36 +310,137 @@ export const HomeView: React.FC<HomeViewProps> = ({
               </a>
             </div>
 
-            {/* 4x4 Grid of Popular Tools */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
-              {popularTools.map((tool) => (
-                <div
-                  key={tool.id}
-                  id={`popular-tool-${tool.id}`}
-                  onClick={() => onSelectTool(tool)}
-                  className="bg-white border border-slate-200 hover:border-blue-400 hover:shadow-xs p-4 rounded-xl transition-all cursor-pointer group flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-2.5">
-                      <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                        {renderToolIcon(tool.icon, "w-4 h-4")}
+              {popularTools.map((tool) => {
+                const isFav = favorites.includes(tool.id);
+                const isHighUse = ['pdf-to-word', 'merge-pdf', 'compress-pdf', 'jpg-to-pdf', 'pdf-to-jpg', 'word-to-pdf'].includes(tool.id);
+                return (
+                  <div
+                    key={tool.id}
+                    id={`popular-tool-${tool.id}`}
+                    onClick={() => onSelectTool(tool)}
+                    className="bg-white border border-slate-200 hover:border-blue-400 hover:shadow-xs p-3.5 rounded-xl transition-all cursor-pointer group flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                            {renderToolIcon(tool.icon, "w-4 h-4")}
+                          </div>
+                          {isHighUse && (
+                            <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded">
+                              Popular
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleFavorite(tool.id);
+                          }}
+                          className="text-slate-300 hover:text-amber-500 p-1 transition-colors"
+                          title={isFav ? "Remove from favorites" : "Add to favorites"}
+                        >
+                          <Star className={`w-4 h-4 ${isFav ? 'text-amber-500 fill-amber-500' : ''}`} />
+                        </button>
                       </div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
-                        {tool.fromFormat} → {tool.toFormat}
-                      </span>
+
+                      <h3 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                        {tool.name}
+                      </h3>
+                      <p className="mt-1 text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                        {tool.shortDescription}
+                      </p>
                     </div>
 
-                    <h3 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
-                      {tool.name}
-                    </h3>
-                    <p className="mt-1 text-xs text-slate-500 line-clamp-2 leading-relaxed">
-                      {tool.shortDescription}
-                    </p>
+                    <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-blue-600 font-medium">
+                      <span className="text-[11px] text-blue-600 font-semibold">Use tool →</span>
+                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                    </div>
                   </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
 
-                  <div className="mt-3.5 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs text-blue-600 font-medium">
-                    <span className="text-[11px] text-slate-400 group-hover:text-blue-600 transition-colors">Instant Process</span>
-                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+      {/* 2.5 Popular Workflows Section */}
+      {selectedCategory === 'all' && searchQuery === '' && (
+        <section className="py-8 border-b border-slate-200 bg-slate-50/60">
+          <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="mb-4">
+              <h2 className="text-base font-bold text-slate-900">Popular workflows</h2>
+              <p className="text-xs text-slate-500">Common tasks, simplified.</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              {[
+                { title: 'Edit a PDF', steps: ['Upload', 'Edit', 'Download'], toolId: 'edit-pdf' },
+                { title: 'Convert a document', steps: ['Upload', 'Convert', 'Download'], toolId: 'pdf-to-word' },
+                { title: 'Reduce file size', steps: ['Upload', 'Compress', 'Download'], toolId: 'compress-pdf' },
+                { title: 'Combine documents', steps: ['Upload', 'Arrange', 'Merge'], toolId: 'merge-pdf' },
+              ].map((wf, idx) => {
+                const tool = TOOLS.find(t => t.id === wf.toolId) || TOOLS[0];
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => onSelectTool(tool)}
+                    className="bg-white border border-slate-200 hover:border-blue-400 p-4 rounded-xl shadow-xs transition-all cursor-pointer group"
+                  >
+                    <div className="text-xs font-bold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors">
+                      {wf.title}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                      <span>{wf.steps[0]}</span>
+                      <span className="text-slate-300">→</span>
+                      <span>{wf.steps[1]}</span>
+                      <span className="text-slate-300">→</span>
+                      <span>{wf.steps[2]}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* 2.6 What do you want to do? Section */}
+      {selectedCategory === 'all' && searchQuery === '' && (
+        <section className="py-10 border-b border-slate-200 bg-white">
+          <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="mb-6">
+              <h2 className="text-base font-bold text-slate-900">What do you want to do?</h2>
+              <p className="text-xs text-slate-500">Quick discovery by action category</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              {[
+                { label: 'CONVERT', toolIds: ['pdf-to-word', 'word-to-pdf', 'pdf-to-excel', 'pdf-to-jpg'] },
+                { label: 'ORGANIZE', toolIds: ['merge-pdf', 'split-pdf', 'extract-pages', 'delete-pages'] },
+                { label: 'EDIT', toolIds: ['edit-pdf', 'add-text-pdf', 'add-image-pdf', 'watermark-pdf'] },
+                { label: 'OPTIMIZE', toolIds: ['compress-pdf', 'compress-image', 'resize-image'] },
+                { label: 'SECURE', toolIds: ['protect-pdf', 'sign-pdf', 'redact-pdf'] },
+              ].map((group) => (
+                <div key={group.label} className="bg-slate-50/70 border border-slate-200/80 rounded-xl p-4">
+                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3 pb-2 border-b border-slate-200">
+                    {group.label}
+                  </div>
+                  <div className="space-y-2">
+                    {group.toolIds.map((id) => {
+                      const t = TOOLS.find(tool => tool.id === id);
+                      if (!t) return null;
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => onSelectTool(t)}
+                          className="w-full text-left text-xs font-semibold text-slate-700 hover:text-blue-600 truncate block py-1 cursor-pointer transition-colors"
+                        >
+                          {t.name}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
