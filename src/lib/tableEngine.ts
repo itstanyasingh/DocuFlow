@@ -59,7 +59,7 @@ export function jsonToXlsx(jsonData: any[], sheetName: string = 'Export'): Uint8
 /**
  * Convert XLSX spreadsheet to a structured, printable PDF document
  */
-export function xlsxToPdf(arrayBuffer: ArrayBuffer, fileName: string): Uint8Array {
+export async function xlsxToPdf(arrayBuffer: ArrayBuffer, fileName: string): Promise<Uint8Array> {
   const csv = xlsxToCsv(arrayBuffer, 0);
   const rows = csv.split('\n').filter(r => r.trim().length > 0);
   
@@ -74,5 +74,5 @@ export function xlsxToPdf(arrayBuffer: ArrayBuffer, fileName: string): Uint8Arra
     formattedLines.push(cols.join('   |   '));
   }
 
-  return textToPdf(formattedLines.join('\n'), fileName.replace(/\.xlsx?$/i, ''));
+  return await textToPdf(formattedLines.join('\n'));
 }

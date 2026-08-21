@@ -73,28 +73,28 @@ export const FileUtilitiesView: React.FC<FileUtilitiesViewProps> = ({
       if (tool.id === 'hash-generator') {
         const hashes = await generateFileHashes(files[0].file);
         setHashResult(hashes);
-      } else if (tool.id === 'file-type-detector' || tool.id === 'file-type-checker' || tool.id === 'file-metadata-viewer' || tool.id === 'file-size-analyzer') {
+      } else if (tool.id === 'file-type-detector' || tool.id === 'file-type-checker' || tool.id === 'file-metadata-viewer' || tool.id === 'file-size-analyzer' || tool.id === 'file-size-calculator') {
         const sig = await detectFileSignature(files[0].file);
         setSignatureResult(sig);
       } else if (tool.id === 'zip-extractor') {
         const items = await extractZipArchive(files[0].file);
         setExtractedFiles(items);
       } else if (tool.id === 'zip-creator' || tool.id === 'file-compressor') {
-        const zipBlob = await createZipArchive(
-          files.map(f => ({ name: f.name, fileOrBuffer: f.file }))
+        const zipRes = await createZipArchive(
+          files.map(f => ({ name: f.name, file: f.file }))
         );
-        setCreatedZipBlob(zipBlob);
-        setCreatedZipName(`Archive_${files.length}_Files.zip`);
+        setCreatedZipBlob(zipRes.blob);
+        setCreatedZipName(zipRes.fileName || `Archive_${files.length}_Files.zip`);
       } else if (tool.id === 'duplicate-checker' || tool.id === 'duplicate-file-checker') {
         const rawFiles = files.map(f => f.file);
         const report = await checkDuplicateFiles(rawFiles);
         setDuplicateReport(report);
       } else if (tool.id === 'file-renamer' || tool.id === 'multiple-file-renamer') {
-        const zipBlob = await createZipArchive(
-          files.map((f, idx) => ({ name: `file_${idx + 1}_${f.name}`, fileOrBuffer: f.file }))
+        const zipRes = await createZipArchive(
+          files.map((f, idx) => ({ name: `file_${idx + 1}_${f.name}`, file: f.file }))
         );
-        setCreatedZipBlob(zipBlob);
-        setCreatedZipName(`Renamed_${files.length}_Files.zip`);
+        setCreatedZipBlob(zipRes.blob);
+        setCreatedZipName(zipRes.fileName || `Renamed_${files.length}_Files.zip`);
       }
     } catch (err) {
       console.error(err);
@@ -103,8 +103,9 @@ export const FileUtilitiesView: React.FC<FileUtilitiesViewProps> = ({
     }
   };
 
-  const downloadExtractedFile = (item: ExtractedZipItem) => {
-    const url = URL.createObjectURL(item.blob);
+  const downloadExtractedFile = async (item: ExtractedZipItem) => {
+    const blob = await item.getBlob();
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = item.name;

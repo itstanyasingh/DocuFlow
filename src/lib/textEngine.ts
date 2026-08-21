@@ -1,194 +1,211 @@
-import { jsPDF } from 'jspdf';
-import { Document, Paragraph, TextRun, Packer } from 'docx';
+export type CaseType =
+  | 'uppercase'
+  | 'lowercase'
+  | 'titlecase'
+  | 'title'
+  | 'sentencecase'
+  | 'sentence'
+  | 'camelcase'
+  | 'camel'
+  | 'snakecase'
+  | 'snake'
+  | 'kebabcase'
+  | 'kebab'
+  | 'constant';
 
-export interface TextStatistics {
-  words: number;
+export type TextCaseType = CaseType;
+
+// 1. Case Converter
+export function convertTextCase(text: string, type: CaseType | TextCaseType): string {
+  switch (type) {
+    case 'uppercase':
+      return text.toUpperCase();
+    case 'lowercase':
+      return text.toLowerCase();
+    case 'titlecase':
+    case 'title':
+      return text.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase());
+    case 'sentencecase':
+    case 'sentence':
+      return text.toLowerCase().replace(/(^\s*|\.\s*)([a-z])/g, (m, p1, p2) => p1 + p2.toUpperCase());
+    case 'camelcase':
+    case 'camel':
+      return text
+        .toLowerCase()
+        .replace(/[^a-zA-Z0-9]+(.)/g, (m, chr) => chr.toUpperCase())
+        .replace(/^[A-Z]/, (chr) => chr.toLowerCase());
+    case 'snakecase':
+    case 'snake':
+      return text
+        .replace(/([a-z])([A-Z])/g, '$1_$2')
+        .replace(/[\s\W]+/g, '_')
+        .toLowerCase()
+        .replace(/^_|_$/g, '');
+    case 'kebabcase':
+    case 'kebab':
+      return text
+        .replace(/([a-z])([A-Z])/g, '$1-$2')
+        .replace(/[\s\W]+/g, '-')
+        .toLowerCase()
+        .replace(/^-|-$/g, '');
+    case 'constant':
+      return text
+        .replace(/([a-z])([A-Z])/g, '$1_$2')
+        .replace(/[\s\W]+/g, '_')
+        .toUpperCase()
+        .replace(/^_|_$/g, '');
+    default:
+      return text;
+  }
+}
+
+// 2. Word Counter & Text Statistics
+export interface TextStats {
   characters: number;
   charactersNoSpaces: number;
-  lines: number;
+  words: number;
+  sentences: number;
   paragraphs: number;
+  lines: number;
   readingTimeMinutes: number;
   speakingTimeMinutes: number;
   avgWordLength: number;
 }
 
-/**
- * 1. Calculate deterministic text statistics
- */
-export function analyzeTextStatistics(text: string): TextStatistics {
+export type TextStatistics = TextStats;
+
+export function calculateTextStats(text: string): TextStats {
   const characters = text.length;
   const charactersNoSpaces = text.replace(/\s/g, '').length;
-  
-  const wordsArray = text.trim().match(/\S+/g) || [];
-  const words = wordsArray.length;
-  
-  const lines = text ? text.split(/\r\n|\r|\n/).length : 0;
-  
-  const paragraphs = text
-    ? text.split(/\n\s*\n/).filter(p => p.trim().length > 0).length
-    : 0;
 
-  const readingTimeMinutes = Math.ceil(words / 200); // avg 200 WPM
-  const speakingTimeMinutes = Math.ceil(words / 130); // avg 130 WPM
-  const avgWordLength = words > 0 ? Number((charactersNoSpaces / words).toFixed(1)) : 0;
+  const wordsMatch = text.trim().match(/\b\w+\b/g);
+  const words = wordsMatch ? wordsMatch.length : 0;
+
+  const sentencesMatch = text.trim().match(/[^.!?]+[.!?]+/g);
+  const sentences = sentencesMatch ? sentencesMatch.length : text.trim() ? 1 : 0;
+
+  const lines = text ? text.split('\n').length : 0;
+
+  const paragraphsMatch = text.split(/\n\s*\n/).filter((p) => p.trim().length > 0);
+  const paragraphs = paragraphsMatch.length || (text.trim() ? 1 : 0);
+
+  const readingTimeMinutes = Math.max(1, Math.ceil(words / 200));
+  const speakingTimeMinutes = Math.max(1, Math.ceil(words / 130));
+  const avgWordLength = words > 0 ? parseFloat((charactersNoSpaces / words).toFixed(1)) : 0;
 
   return {
-    words,
     characters,
     charactersNoSpaces,
+    words,
+    sentences,
+    paragraphs,
     lines,
-    paragraphs: Math.max(1, paragraphs),
     readingTimeMinutes,
     speakingTimeMinutes,
     avgWordLength,
   };
 }
 
-/**
- * 2. Convert text case
- */
-export type TextCaseType = 
-  | 'uppercase'
-  | 'lowercase'
-  | 'title'
-  | 'sentence'
-  | 'camel'
-  | 'snake'
-  | 'kebab'
-  | 'constant';
+export const analyzeTextStatistics = calculateTextStats;
 
-export function convertTextCase(text: string, targetCase: TextCaseType): string {
-  switch (targetCase) {
-    case 'uppercase':
-      return text.toUpperCase();
-    case 'lowercase':
-      return text.toLowerCase();
-    case 'title':
-      return text.replace(
-        /\w\S*/g,
-        (w) => w.charAt(0).toUpperCase() + w.substring(1).toLowerCase()
-      );
-    case 'sentence':
-      return text.toLowerCase().replace(/(^\s*\w|[.!?]\s*\w)/g, (c) => c.toUpperCase());
-    case 'camel':
-      return text
-        .toLowerCase()
-        .replace(/[^a-zA-Z0-9]+(.)/g, (_, chr) => chr.toUpperCase());
-    case 'snake':
-      return text
-        .trim()
-        .toLowerCase()
-        .replace(/[\s\W-]+/g, '_');
-    case 'kebab':
-      return text
-        .trim()
-        .toLowerCase()
-        .replace(/[\s\W_]+/g, '-');
-    case 'constant':
-      return text
-        .trim()
-        .toUpperCase()
-        .replace(/[\s\W-]+/g, '_');
-    default:
-      return text;
-  }
-}
-
-/**
- * 3. Text to PDF Conversion
- */
-export async function convertTextToPdf(
+// 3. Text Sorter
+export function sortTextLines(
   text: string,
-  options?: { title?: string; fontSize?: number; fontName?: string }
-): Promise<Blob> {
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'pt',
-    format: 'a4',
-  });
+  sortMode: 'a-z' | 'z-a' | 'num-asc' | 'num-desc',
+  removeDuplicates: boolean = false
+): string {
+  let lines = text.split('\n');
 
-  const margin = 40;
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const maxLineWidth = pageWidth - margin * 2;
-  const fontSize = options?.fontSize || 11;
-  const lineHeight = fontSize * 1.35;
-
-  doc.setFontSize(fontSize);
-  doc.setFont('Helvetica', 'normal');
-
-  let currentY = margin;
-
-  if (options?.title) {
-    doc.setFontSize(16);
-    doc.setFont('Helvetica', 'bold');
-    doc.text(options.title, margin, currentY);
-    currentY += 28;
-    doc.setFontSize(fontSize);
-    doc.setFont('Helvetica', 'normal');
+  if (removeDuplicates) {
+    lines = Array.from(new Set(lines));
   }
 
-  const lines = doc.splitTextToSize(text, maxLineWidth);
+  lines.sort((a, b) => {
+    if (sortMode === 'a-z') return a.localeCompare(b);
+    if (sortMode === 'z-a') return b.localeCompare(a);
 
-  for (let i = 0; i < lines.length; i++) {
-    if (currentY + lineHeight > pageHeight - margin) {
-      doc.addPage();
-      currentY = margin;
+    const numA = parseFloat(a.replace(/[^0-9.-]/g, ''));
+    const numB = parseFloat(b.replace(/[^0-9.-]/g, ''));
+
+    if (!isNaN(numA) && !isNaN(numB)) {
+      return sortMode === 'num-asc' ? numA - numB : numB - numA;
     }
-    doc.text(lines[i], margin, currentY);
-    currentY += lineHeight;
-  }
-
-  return doc.output('blob');
-}
-
-/**
- * 4. Text to DOCX Conversion
- */
-export async function convertTextToDocx(
-  text: string,
-  options?: { title?: string }
-): Promise<Blob> {
-  const paragraphs: Paragraph[] = [];
-
-  if (options?.title) {
-    paragraphs.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: options.title,
-            bold: true,
-            size: 32, // 16pt
-          }),
-        ],
-        spacing: { after: 200 },
-      })
-    );
-  }
-
-  const rawParagraphs = text.split(/\r\n|\r|\n/);
-  for (const p of rawParagraphs) {
-    paragraphs.push(
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: p,
-            size: 22, // 11pt
-          }),
-        ],
-        spacing: { after: 120 },
-      })
-    );
-  }
-
-  const doc = new Document({
-    sections: [
-      {
-        properties: {},
-        children: paragraphs,
-      },
-    ],
+    return sortMode === 'num-asc' ? a.localeCompare(b) : b.localeCompare(a);
   });
 
-  return await Packer.toBlob(doc);
+  return lines.join('\n');
+}
+
+// 4. Remove Duplicate Lines
+export function removeDuplicateLines(text: string, caseSensitive: boolean = true): string {
+  const lines = text.split('\n');
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const line of lines) {
+    const key = caseSensitive ? line : line.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(line);
+    }
+  }
+
+  return result.join('\n');
+}
+
+// 5. Text Cleaner
+export function cleanTextContent(
+  text: string,
+  options: {
+    removeExtraSpaces?: boolean;
+    removeEmptyLines?: boolean;
+    trimLines?: boolean;
+    normalizeLineBreaks?: boolean;
+  }
+): string {
+  let result = text;
+
+  if (options.normalizeLineBreaks) {
+    result = result.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  }
+
+  if (options.removeExtraSpaces) {
+    result = result.replace(/[ \t]+/g, ' ');
+  }
+
+  let lines = result.split('\n');
+
+  if (options.trimLines) {
+    lines = lines.map((l) => l.trim());
+  }
+
+  if (options.removeEmptyLines) {
+    lines = lines.filter((l) => l.trim().length > 0);
+  }
+
+  return lines.join('\n');
+}
+
+// 6. Find & Replace Text
+export function findAndReplaceText(
+  text: string,
+  findStr: string,
+  replaceStr: string,
+  caseSensitive: boolean = false,
+  replaceFirstOnly: boolean = false
+): { resultText: string; matchCount: number } {
+  if (!findStr) {
+    return { resultText: text, matchCount: 0 };
+  }
+
+  const flags = (caseSensitive ? '' : 'i') + (replaceFirstOnly ? '' : 'g');
+  const escaped = findStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(escaped, flags);
+
+  const matches = text.match(regex);
+  const matchCount = matches ? matches.length : 0;
+
+  const resultText = text.replace(regex, replaceStr);
+
+  return { resultText, matchCount };
 }

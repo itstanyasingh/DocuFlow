@@ -62,7 +62,7 @@ Swift: FNCBUS6S
 
 Thank you for your business! Please remit payment before August 25, 2026 to avoid a 1.5% late fee.`;
 
-      const pdfBytes = textToPdf(invoiceText, 'INVOICE - TECHFLOW SYSTEMS');
+      const pdfBytes = await textToPdf(invoiceText);
       return new File([pdfBytes as any], 'TechFlow_Invoice_INV-2026-904.pdf', { type: 'application/pdf' });
     },
     rawText: `TechFlow Systems Invoice #INV-2026-904. Amount: $16,130.81. Due Date: August 25, 2026. Vendor: TechFlow Systems. Customer: Global Logistics Enterprises.`
@@ -99,7 +99,7 @@ The inference latency on A4 standard 300 DPI scanned images was reduced to 34.2m
 4. CONCLUSION & FUTURE WORK
 DocuNet-X demonstrates that explicit geometric coordinate conditioning combined with multimodal attention significantly elevates extraction fidelity. Future research will explore on-device quantization and multi-page cross-document reasoning.`;
 
-      const pdfBytes = textToPdf(paperText, 'DocuNet-X: Multimodal Document Understanding');
+      const pdfBytes = await textToPdf(paperText);
       return new File([pdfBytes as any], 'Quantum_Transformers_Doc_AI_Paper.pdf', { type: 'application/pdf' });
     }
   },
@@ -131,7 +131,7 @@ Provider's total cumulative liability under this agreement shall be strictly cap
 5. GOVERNING LAW & JURISDICTION
 This Agreement shall be governed by and construed in accordance with the laws of the State of Delaware.`;
 
-      const pdfBytes = textToPdf(contract1, 'MASTER SERVICES AGREEMENT - v1.0');
+      const pdfBytes = await textToPdf(contract1);
       return new File([pdfBytes as any], 'Master_Services_Agreement_v1.0.pdf', { type: 'application/pdf' });
     }
   },
@@ -163,7 +163,7 @@ Provider's total cumulative liability under this agreement shall be capped at 12
 5. GOVERNING LAW & ARBITRATION
 This Agreement shall be governed by the laws of the State of California with mandatory binding arbitration in San Francisco, CA.`;
 
-      const pdfBytes = textToPdf(contract2, 'MASTER SERVICES AGREEMENT - v2.0 REVISED');
+      const pdfBytes = await textToPdf(contract2);
       return new File([pdfBytes as any], 'Master_Services_Agreement_v2.0_Redline.pdf', { type: 'application/pdf' });
     }
   },

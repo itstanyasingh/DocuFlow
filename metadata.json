@@ -1,6 +1,6 @@
 {
   "name": "DocuFlow",
-  "description": "All-in-one online document, PDF, image, and OCR processing platform.",
+  "description": "Fast file and document utilities. Convert, merge, split, compress, and edit files in your browser or on Vercel.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

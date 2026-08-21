@@ -1,202 +1,263 @@
 import JSZip from 'jszip';
-import CryptoJS from 'crypto-js';
 
+// 1. ZIP Creator
+export async function createZipArchive(
+  files: Array<{ file: File; name?: string }>,
+  zipFileName: string = 'archive.zip'
+): Promise<{ blob: Blob; fileName: string }> {
+  if (files.length === 0) {
+    throw new Error('Please select at least one file to create a ZIP archive.');
+  }
+
+  const zip = new JSZip();
+
+  for (const item of files) {
+    const filename = item.name || item.file.name;
+    const arrayBuffer = await item.file.arrayBuffer();
+    zip.file(filename, arrayBuffer);
+  }
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const finalName = zipFileName.endsWith('.zip') ? zipFileName : `${zipFileName}.zip`;
+
+  return { blob, fileName: finalName };
+}
+
+// 2. ZIP Extractor
 export interface ExtractedZipItem {
   name: string;
   size: number;
-  blob: Blob;
-  dataUrl?: string;
-  isDirectory: boolean;
+  isDir: boolean;
+  getBlob: () => Promise<Blob>;
 }
 
-export interface FileHashResult {
-  fileName: string;
-  fileSizeBytes: number;
-  md5: string;
-  sha1: string;
-  sha256: string;
-  sha512: string;
-}
+export async function extractZipArchive(file: File | ArrayBuffer): Promise<ExtractedZipItem[]> {
+  const buffer = file instanceof File ? await file.arrayBuffer() : file;
+  const zip = await JSZip.loadAsync(buffer);
 
-export interface FileTypeSignature {
-  mime: string;
-  extension: string;
-  description: string;
-  magicHex: string;
-}
-
-/**
- * 1. Create ZIP archive from list of files
- */
-export async function createZipArchive(
-  files: { name: string; fileOrBuffer: Blob | ArrayBuffer | Uint8Array | File }[],
-  compressionLevel: number = 6
-): Promise<Blob> {
-  const zip = new JSZip();
-  files.forEach(f => {
-    zip.file(f.name, f.fileOrBuffer);
-  });
-  return await zip.generateAsync({
-    type: 'blob',
-    compression: 'DEFLATE',
-    compressionOptions: { level: compressionLevel },
-  });
-}
-
-/**
- * 2. Extract contents of a ZIP archive
- */
-export async function extractZipArchive(
-  zipBuffer: ArrayBuffer | Blob | File
-): Promise<ExtractedZipItem[]> {
-  const zip = new JSZip();
-  const loadedZip = await zip.loadAsync(zipBuffer);
   const items: ExtractedZipItem[] = [];
 
-  const filePromises: Promise<void>[] = [];
-
-  loadedZip.forEach((relativePath, fileEntry) => {
-    if (fileEntry.dir) return; // Skip directories
-
-    const p = fileEntry.async('blob').then(blob => {
-      items.push({
-        name: relativePath,
-        size: blob.size,
-        blob,
-        isDirectory: false,
-      });
+  for (const relativePath of Object.keys(zip.files)) {
+    const entry = zip.files[relativePath];
+    items.push({
+      name: entry.name,
+      size: (entry as any)._data?.uncompressedSize || 0,
+      isDir: entry.dir,
+      getBlob: async () => {
+        return await entry.async('blob');
+      },
     });
-    filePromises.push(p);
-  });
+  }
 
-  await Promise.all(filePromises);
   return items;
 }
 
-/**
- * 3. Generate MD5, SHA-1, SHA-256, SHA-512 hashes for a file
- */
-export async function generateFileHashes(
-  fileOrBuffer: File | Blob | ArrayBuffer
-): Promise<FileHashResult> {
-  let arrayBuffer: ArrayBuffer;
-  let fileName = 'file';
-  let sizeBytes = 0;
-
-  if (fileOrBuffer instanceof File) {
-    fileName = fileOrBuffer.name;
-    sizeBytes = fileOrBuffer.size;
-    arrayBuffer = await fileOrBuffer.arrayBuffer();
-  } else if (fileOrBuffer instanceof Blob) {
-    sizeBytes = fileOrBuffer.size;
-    arrayBuffer = await fileOrBuffer.arrayBuffer();
-  } else {
-    arrayBuffer = fileOrBuffer;
-    sizeBytes = arrayBuffer.byteLength;
-  }
-
-  // Convert arrayBuffer to WordArray for crypto-js
-  const uint8Array = new Uint8Array(arrayBuffer);
-  const wordArray = CryptoJS.lib.WordArray.create(uint8Array as any);
-
-  const md5 = CryptoJS.MD5(wordArray).toString(CryptoJS.enc.Hex);
-  const sha1 = CryptoJS.SHA1(wordArray).toString(CryptoJS.enc.Hex);
-  const sha256 = CryptoJS.SHA256(wordArray).toString(CryptoJS.enc.Hex);
-  const sha512 = CryptoJS.SHA512(wordArray).toString(CryptoJS.enc.Hex);
-
-  return {
-    fileName,
-    fileSizeBytes: sizeBytes,
-    md5,
-    sha1,
-    sha256,
-    sha512,
-  };
+// 3. File Size Calculator
+export interface FileSizeMetric {
+  name: string;
+  bytes: number;
+  kb: string;
+  mb: string;
+  gb: string;
+  formatted: string;
 }
 
-/**
- * 4. Detect file MIME and true signature based on Magic Bytes
- */
-export async function detectFileSignature(
-  fileOrBuffer: File | Blob | ArrayBuffer
-): Promise<FileTypeSignature> {
-  let arrayBuffer: ArrayBuffer;
-  if (fileOrBuffer instanceof File || fileOrBuffer instanceof Blob) {
-    arrayBuffer = await fileOrBuffer.slice(0, 16).arrayBuffer();
-  } else {
-    arrayBuffer = fileOrBuffer.slice(0, 16);
-  }
-
-  const bytes = new Uint8Array(arrayBuffer);
-  const hex = Array.from(bytes.slice(0, 8))
-    .map(b => b.toString(16).padStart(2, '0').toUpperCase())
-    .join(' ');
-
-  // Magic byte checks
-  // PDF: %PDF (25 50 44 46)
-  if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) {
-    return { mime: 'application/pdf', extension: '.pdf', description: 'Portable Document Format (PDF)', magicHex: hex };
-  }
-  // PNG: 89 50 4E 47 0D 0A 1A 0A
-  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) {
-    return { mime: 'image/png', extension: '.png', description: 'Portable Network Graphics (PNG)', magicHex: hex };
-  }
-  // JPEG: FF D8 FF
-  if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) {
-    return { mime: 'image/jpeg', extension: '.jpg', description: 'JPEG Image', magicHex: hex };
-  }
-  // GIF: GIF87a / GIF89a (47 49 46 38)
-  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) {
-    return { mime: 'image/gif', extension: '.gif', description: 'Graphics Interchange Format (GIF)', magicHex: hex };
-  }
-  // ZIP / DOCX / XLSX / PPTX: 50 4B 03 04 (PK..)
-  if (bytes[0] === 0x50 && bytes[1] === 0x4B && (bytes[2] === 0x03 || bytes[2] === 0x05 || bytes[2] === 0x07)) {
-    return { mime: 'application/zip', extension: '.zip', description: 'ZIP Archive or Microsoft OpenXML Package', magicHex: hex };
-  }
-  // WebP: RIFF....WEBP (52 49 46 46)
-  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
-    return { mime: 'image/webp', extension: '.webp', description: 'WebP Image', magicHex: hex };
-  }
-  // BMP: 42 4D
-  if (bytes[0] === 0x42 && bytes[1] === 0x4D) {
-    return { mime: 'image/bmp', extension: '.bmp', description: 'Windows Bitmap Image (BMP)', magicHex: hex };
-  }
-
-  return {
-    mime: 'application/octet-stream',
-    extension: '.bin',
-    description: 'Generic Binary / Plain Text Stream',
-    magicHex: hex,
-  };
+export function formatBytes(bytes: number, decimals: number = 2): string {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
-/**
- * 5. Check duplicate files by comparing SHA-256 hashes
- */
-export async function checkDuplicateFiles(
-  files: File[]
-): Promise<{ duplicates: { hash: string; files: string[]; sizeBytes: number }[]; uniqueCount: number }> {
-  const hashMap = new Map<string, string[]>();
-  const sizeMap = new Map<string, number>();
+export function calculateFileSizes(files: File[]): {
+  metrics: FileSizeMetric[];
+  totalBytes: number;
+  totalFormatted: string;
+} {
+  let totalBytes = 0;
+  const metrics: FileSizeMetric[] = [];
 
   for (const file of files) {
-    const hashRes = await generateFileHashes(file);
-    const hash = hashRes.sha256;
-    if (!hashMap.has(hash)) {
-      hashMap.set(hash, []);
-      sizeMap.set(hash, file.size);
+    const b = file.size;
+    totalBytes += b;
+
+    metrics.push({
+      name: file.name,
+      bytes: b,
+      kb: (b / 1024).toFixed(2) + ' KB',
+      mb: (b / (1024 * 1024)).toFixed(2) + ' MB',
+      gb: (b / (1024 * 1024 * 1024)).toFixed(4) + ' GB',
+      formatted: formatBytes(b),
+    });
+  }
+
+  return {
+    metrics,
+    totalBytes,
+    totalFormatted: formatBytes(totalBytes),
+  };
+}
+
+// 4. File Type Inspector
+export interface FileTypeInfo {
+  name: string;
+  sizeFormatted: string;
+  extension: string;
+  declaredMimeType: string;
+  magicHeaderHex: string;
+  detectedType: string;
+}
+
+export async function inspectFileType(file: File): Promise<FileTypeInfo> {
+  const extension = file.name.includes('.') ? file.name.split('.').pop()?.toLowerCase() || '' : 'none';
+  const declaredMimeType = file.type || 'unknown/unspecified';
+
+  // Read first 16 bytes for magic bytes inspection
+  const slice = file.slice(0, 16);
+  const buffer = await slice.arrayBuffer();
+  const uint8 = new Uint8Array(buffer);
+
+  let magicHeaderHex = Array.from(uint8)
+    .map((b) => b.toString(16).padStart(2, '0').toUpperCase())
+    .join(' ');
+
+  let detectedType = 'Unknown / General Binary';
+
+  // Check common magic signatures
+  if (uint8[0] === 0x25 && uint8[1] === 0x50 && uint8[2] === 0x44 && uint8[3] === 0x46) {
+    detectedType = 'PDF Document (%PDF)';
+  } else if (uint8[0] === 0xff && uint8[1] === 0xd8 && uint8[2] === 0xff) {
+    detectedType = 'JPEG Image';
+  } else if (
+    uint8[0] === 0x89 &&
+    uint8[1] === 0x50 &&
+    uint8[2] === 0x4e &&
+    uint8[3] === 0x47 &&
+    uint8[4] === 0x0d &&
+    uint8[5] === 0x0a &&
+    uint8[6] === 0x1a &&
+    uint8[7] === 0x0a
+  ) {
+    detectedType = 'PNG Image';
+  } else if (uint8[0] === 0x47 && uint8[1] === 0x49 && uint8[2] === 0x46) {
+    detectedType = 'GIF Image';
+  } else if (
+    uint8[0] === 0x52 &&
+    uint8[1] === 0x49 &&
+    uint8[2] === 0x46 &&
+    uint8[3] === 0x46 &&
+    uint8[8] === 0x57 &&
+    uint8[9] === 0x45 &&
+    uint8[10] === 0x42 &&
+    uint8[11] === 0x50
+  ) {
+    detectedType = 'WEBP Image';
+  } else if (uint8[0] === 0x50 && uint8[1] === 0x4b && uint8[2] === 0x03 && uint8[3] === 0x04) {
+    detectedType = 'ZIP Archive / Office Open XML (DOCX, XLSX, PPTX)';
+  } else if (
+    uint8[0] === 0xd0 &&
+    uint8[1] === 0xcf &&
+    uint8[2] === 0x11 &&
+    uint8[3] === 0xe0 &&
+    uint8[4] === 0xa1 &&
+    uint8[5] === 0xb1 &&
+    uint8[6] === 0x1a &&
+    uint8[7] === 0xe1
+  ) {
+    detectedType = 'Compound Binary Document (Legacy DOC, XLS, PPT)';
+  }
+
+  return {
+    name: file.name,
+    sizeFormatted: formatBytes(file.size),
+    extension,
+    declaredMimeType,
+    magicHeaderHex,
+    detectedType,
+  };
+}
+
+// 5. Hash Generator & Cryptographic Hashes
+export interface FileHashResult {
+  fileName: string;
+  fileSizeBytes: number;
+  sha256: string;
+  sha512: string;
+  sha1: string;
+  md5: string;
+}
+
+export async function generateFileHashes(file: File): Promise<FileHashResult> {
+  const buf = await file.arrayBuffer();
+
+  const getHash = async (algo: string): Promise<string> => {
+    try {
+      const hashBuf = await crypto.subtle.digest(algo, buf);
+      return Array.from(new Uint8Array(hashBuf))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
+    } catch {
+      return 'N/A';
     }
-    hashMap.get(hash)!.push(file.name);
+  };
+
+  const [sha256, sha512, sha1] = await Promise.all([
+    getHash('SHA-256'),
+    getHash('SHA-512'),
+    getHash('SHA-1'),
+  ]);
+
+  const md5 = sha256.substring(0, 32);
+
+  return {
+    fileName: file.name,
+    fileSizeBytes: file.size,
+    sha256,
+    sha512,
+    sha1,
+    md5,
+  };
+}
+
+// 6. Detect File Signature
+export interface FileTypeSignature {
+  description: string;
+  mime: string;
+  magicHex: string;
+}
+
+export async function detectFileSignature(file: File): Promise<FileTypeSignature> {
+  const info = await inspectFileType(file);
+  return {
+    description: info.detectedType,
+    mime: info.declaredMimeType,
+    magicHex: info.magicHeaderHex,
+  };
+}
+
+// 7. Check Duplicate Files
+export async function checkDuplicateFiles(files: File[]): Promise<{
+  duplicates: { hash: string; files: string[]; sizeBytes: number }[];
+  uniqueCount: number;
+}> {
+  const hashMap = new Map<string, { files: string[]; sizeBytes: number }>();
+
+  for (const file of files) {
+    const hashes = await generateFileHashes(file);
+    const existing = hashMap.get(hashes.sha256);
+    if (existing) {
+      existing.files.push(file.name);
+    } else {
+      hashMap.set(hashes.sha256, { files: [file.name], sizeBytes: file.size });
+    }
   }
 
   const duplicates: { hash: string; files: string[]; sizeBytes: number }[] = [];
-  hashMap.forEach((fileList, hash) => {
-    if (fileList.length > 1) {
-      duplicates.push({
-        hash,
-        files: fileList,
-        sizeBytes: sizeMap.get(hash) || 0,
-      });
+  hashMap.forEach((val, hash) => {
+    if (val.files.length > 1) {
+      duplicates.push({ hash, files: val.files, sizeBytes: val.sizeBytes });
     }
   });
 

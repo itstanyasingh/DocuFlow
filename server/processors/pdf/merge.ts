@@ -41,6 +41,21 @@ export async function mergePdfFiles(
 
   const pdfBytes = await mergedPdf.save({ useObjectStreams: true });
 
+  // Output Validation
+  if (!pdfBytes || pdfBytes.length === 0) {
+    throw new Error('Merge failed. The generated PDF could not be validated.');
+  }
+
+  try {
+    const testDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+    const outputPageCount = testDoc.getPageCount();
+    if (outputPageCount !== totalPages) {
+      throw new Error('Merge failed. Page count verification mismatch.');
+    }
+  } catch (err: any) {
+    throw new Error('Merge failed. The generated PDF could not be validated.');
+  }
+
   return {
     pdfBytes,
     totalPages,

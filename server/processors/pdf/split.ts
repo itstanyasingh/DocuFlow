@@ -55,21 +55,42 @@ export async function splitPdfFile(
 
   for (const token of rangeTokens) {
     if (token.includes('-')) {
-      const [startStr, endStr] = token.split('-').map((t) => parseInt(t.trim(), 10));
-      if (!isNaN(startStr) && !isNaN(endStr)) {
-        const start = Math.max(1, Math.min(startStr, endStr));
-        const end = Math.min(totalPages, Math.max(startStr, endStr));
-        const group: number[] = [];
-        for (let p = start; p <= end; p++) {
-          group.push(p - 1);
-        }
-        if (group.length > 0) parsedGroups.push(group);
+      const parts = token.split('-').map((t) => t.trim());
+      if (parts.length !== 2) {
+        throw new Error(`Invalid page range format: "${token}".`);
       }
+      const startStr = parts[0];
+      const endStr = parts[1];
+      if (startStr === '' || endStr === '') {
+        throw new Error(`Invalid page range: "${token}".`);
+      }
+      const startVal = parseInt(startStr, 10);
+      const endVal = parseInt(endStr, 10);
+
+      if (isNaN(startVal) || isNaN(endVal)) {
+        throw new Error(`Invalid page numbers in range: "${token}".`);
+      }
+      if (startVal > endVal) {
+        throw new Error(`Invalid page range "${token}": start page cannot be greater than end page.`);
+      }
+      if (startVal < 1 || endVal > totalPages) {
+        throw new Error(`Page number out of range in "${token}". This PDF contains ${totalPages} pages.`);
+      }
+
+      const group: number[] = [];
+      for (let p = startVal; p <= endVal; p++) {
+        group.push(p - 1);
+      }
+      if (group.length > 0) parsedGroups.push(group);
     } else {
       const p = parseInt(token, 10);
-      if (!isNaN(p) && p >= 1 && p <= totalPages) {
-        parsedGroups.push([p - 1]);
+      if (isNaN(p)) {
+        throw new Error(`Invalid page number: "${token}".`);
       }
+      if (p < 1 || p > totalPages) {
+        throw new Error(`Page ${p} does not exist. This PDF contains ${totalPages} pages.`);
+      }
+      parsedGroups.push([p - 1]);
     }
   }
 

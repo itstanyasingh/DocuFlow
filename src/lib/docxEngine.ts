@@ -114,6 +114,5 @@ export async function docxToTxt(docxBuffer: ArrayBuffer): Promise<string> {
  */
 export async function docxToPdf(docxBuffer: ArrayBuffer, fileName: string): Promise<Uint8Array> {
   const extractedText = await docxToTxt(docxBuffer);
-  const cleanTitle = fileName.replace(/\.docx?$/i, '');
-  return textToPdf(extractedText || 'Blank document', cleanTitle);
+  return await textToPdf(extractedText || 'Blank document');
 }

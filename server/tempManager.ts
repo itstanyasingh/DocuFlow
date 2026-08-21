@@ -1,8 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import os from 'os';
 
-const TEMP_DIR = path.join(process.cwd(), 'temp');
+const TEMP_DIR = path.join(os.tmpdir(), 'docuflow_temp');
 const UPLOADS_DIR = path.join(TEMP_DIR, 'uploads');
 const PROCESSING_DIR = path.join(TEMP_DIR, 'processing');
 const RESULTS_DIR = path.join(TEMP_DIR, 'results');

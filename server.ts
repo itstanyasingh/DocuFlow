@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import cors from "cors";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import pdfToolsRouter from "./server/routes/pdfTools";
@@ -12,7 +13,42 @@ dotenv.config();
 initTempDirectories();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+
+// Configure CORS for production frontend and local development
+const allowedFrontendUrl = process.env.FRONTEND_URL || "https://docuflow-liart.vercel.app";
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like cURL, mobile apps, server-to-server)
+      if (!origin) return callback(null, true);
+
+      // Allow configured production FRONTEND_URL
+      if (origin === allowedFrontendUrl) return callback(null, true);
+
+      // Allow local development origins (localhost, 127.0.0.1)
+      if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+        return callback(null, true);
+      }
+
+      // Allow Vercel preview environments (*.vercel.app)
+      if (/\.vercel\.app$/.test(origin)) {
+        return callback(null, true);
+      }
+
+      // Allow Cloud Run / AI Studio preview environments (*.run.app)
+      if (/\.run\.app$/.test(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(null, true);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  })
+);
 
 // Enable large JSON & form payloads (up to 50mb)
 app.use(express.json({ limit: "50mb" }));
@@ -67,7 +103,7 @@ app.get("/api/files/:id/download", (req, res) => {
 
 // API health route
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", service: "DocuFlow API", timestamp: new Date().toISOString() });
+  res.json({ status: "ok", service: "DocuFlow API" });
 });
 
 // Admin Analytics Stats
@@ -136,7 +172,14 @@ app.post("/api/jobs/:id/complete", (req, res) => {
   res.json({ success: true, job });
 });
 
+export { app };
+export default app;
+
 async function startServer() {
+  if (process.env.VERCEL) {
+    return;
+  }
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -156,4 +199,6 @@ async function startServer() {
   });
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}

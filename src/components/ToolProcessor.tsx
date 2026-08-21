@@ -19,6 +19,7 @@ import { ResultPanel } from './shared/ResultPanel';
 import { ErrorMessage } from './shared/ErrorMessage';
 import { PDFDocument } from 'pdf-lib';
 import { renderPdfPages } from '../lib/pdfjsHelper';
+import { getApiUrl, getDownloadUrl } from '../lib/api';
 
 interface ToolProcessorProps {
   tool: ToolDefinition;
@@ -334,14 +335,29 @@ export const ToolProcessor: React.FC<ToolProcessorProps> = ({
           break;
         }
 
-        default:
-          throw new Error('This tool is not yet implemented.');
+        case 'pdf-to-word':
+        case 'word-to-pdf':
+        case 'pdf-to-excel':
+        case 'pdf-to-text': {
+          formData.append('file', primaryFile.file, primaryFile.name);
+          break;
+        }
+
+        default: {
+          if (selectedFiles.length > 0) {
+            selectedFiles.forEach((item) => {
+              formData.append('files', item.file, item.name);
+            });
+            formData.append('file', primaryFile.file, primaryFile.name);
+          }
+          break;
+        }
       }
 
       setProcessingStage('processing');
       setProgressStatus('Processing your PDF... Please keep this page open.');
 
-      const response = await fetch(endpoint, {
+      const response = await fetch(getApiUrl(endpoint), {
         method: 'POST',
         body: formData,
       });
@@ -354,14 +370,8 @@ export const ToolProcessor: React.FC<ToolProcessorProps> = ({
 
       const totalInputBytes = selectedFiles.reduce((acc, f) => acc + f.size, 0);
 
-      // Construct verified ProcessedResult
-      let blobUrl = data.downloadUrl;
-      if (data.dataUrl) {
-        // Convert base64 data to native Blob URL for instant downloads without network roundtrip
-        const res = await fetch(data.dataUrl);
-        const blob = await res.blob();
-        blobUrl = URL.createObjectURL(blob);
-      }
+      // Use central API helper to format full download URL for remote backend or local dev
+      const blobUrl = getDownloadUrl(data.downloadUrl || '');
 
       const result: ProcessedResult = {
         id: data.fileId || 'res_' + Math.random().toString(36).substring(2, 9),

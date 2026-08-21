@@ -83,8 +83,22 @@ export async function validatePdf(
     };
   }
 
-  // Check if parseable by pdf-lib
+  // Check if parseable or encrypted by pdf-lib
   try {
+    // First test loading without ignoring encryption to detect password protection
+    try {
+      await PDFDocument.load(buffer, { ignoreEncryption: false });
+    } catch (encErr: any) {
+      const msg = encErr?.message || '';
+      if (msg.includes('encrypt') || msg.includes('password') || msg.includes('Encrypt') || msg.includes('decrypt')) {
+        return {
+          isValid: false,
+          error: 'This PDF is password protected. Please unlock it before merging.',
+          fileSize,
+        };
+      }
+    }
+
     const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
     const pageCount = pdfDoc.getPageCount();
     if (pageCount === 0) {

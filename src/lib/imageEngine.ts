@@ -1,192 +1,288 @@
-import JSZip from 'jszip';
-
 export interface ImageProcessOptions {
-  targetFormat?: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/bmp';
-  quality?: number; // 0.1 to 1.0
-  resizeMode?: 'none' | 'percentage' | 'dimensions';
-  scalePercentage?: number; // 1 to 200
-  targetWidth?: number;
-  targetHeight?: number;
+  // Compress
+  quality?: number; // 0 to 1
+  maxWidth?: number;
+  maxHeight?: number;
+  targetFormat?: 'image/jpeg' | 'image/png' | 'image/webp';
+  // Resize
+  width?: number;
+  height?: number;
   maintainAspectRatio?: boolean;
-  cropRect?: { x: number; y: number; width: number; height: number }; // normalized 0..1 or absolute px
-  rotation?: number; // 0, 90, 180, 270
+  // Rotate
+  rotationAngle?: 90 | 180 | 270;
+  // Crop
+  cropBox?: { x: number; y: number; width: number; height: number };
+  // Flip
   flipHorizontal?: boolean;
   flipVertical?: boolean;
+  // Filters
+  grayscale?: boolean;
+  sepia?: boolean;
+  invert?: boolean;
+  blurRadius?: number; // px
+  brightness?: number; // -100 to 100
+  contrast?: number; // -100 to 100
+  // Watermark
+  watermarkText?: string;
+  watermarkFontSize?: number;
+  watermarkOpacity?: number;
+  watermarkPosition?: 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  watermarkRotation?: number; // angle in degrees
+  // Social Media Preset
+  socialPresetWidth?: number;
+  socialPresetHeight?: number;
 }
 
-/**
- * Load an image from File, Blob, or DataURL into an HTMLImageElement
- */
-export function loadImage(src: string | File | Blob): Promise<HTMLImageElement> {
+// Load image into HTMLImageElement
+function loadImage(file: File | Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => resolve(img);
-    img.onerror = (e) => reject(new Error('Failed to load image: ' + e));
-
-    if (typeof src === 'string') {
-      img.src = src;
-    } else {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        img.src = e.target?.result as string;
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(src);
-    }
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = (err) => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to load image file. Please check if the file is a valid image.'));
+    };
+    img.src = url;
   });
 }
 
-/**
- * Process single image with format conversion, compression, resize, rotation, crop, flip
- */
+// Universal image processor
 export async function processImage(
-  imageSource: string | File | Blob,
-  options: ImageProcessOptions = {}
-): Promise<{
-  blob: Blob;
-  dataUrl: string;
-  width: number;
-  height: number;
-  sizeBytes: number;
-  originalSizeBytes: number;
-  reductionPercentage: number;
-}> {
-  const originalSizeBytes = typeof imageSource === 'string' 
-    ? Math.round(imageSource.length * 0.75) 
-    : imageSource.size;
+  file: File | Blob,
+  options: ImageProcessOptions
+): Promise<{ blob: Blob; width: number; height: number; mimeType: string }> {
+  const img = await loadImage(file);
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
 
-  const img = await loadImage(imageSource);
-  
-  let sourceX = 0;
-  let sourceY = 0;
-  let sourceWidth = img.naturalWidth || img.width;
-  let sourceHeight = img.naturalHeight || img.height;
-
-  // Handle Crop if provided
-  if (options.cropRect) {
-    const c = options.cropRect;
-    // Check if coordinates are normalized (0 to 1) or pixel values
-    const isNormalized = c.width <= 1 && c.height <= 1 && c.x <= 1 && c.y <= 1;
-    sourceX = isNormalized ? Math.round(c.x * sourceWidth) : c.x;
-    sourceY = isNormalized ? Math.round(c.y * sourceHeight) : c.y;
-    sourceWidth = isNormalized ? Math.round(c.width * sourceWidth) : c.width;
-    sourceHeight = isNormalized ? Math.round(c.height * sourceHeight) : c.height;
+  if (!ctx) {
+    throw new Error('Canvas context unavailable in browser.');
   }
-  
-  let targetWidth = sourceWidth;
-  let targetHeight = sourceHeight;
 
-  if (options.resizeMode === 'percentage' && options.scalePercentage) {
-    const scale = options.scalePercentage / 100;
-    targetWidth = Math.max(1, Math.round(sourceWidth * scale));
-    targetHeight = Math.max(1, Math.round(sourceHeight * scale));
-  } else if (options.resizeMode === 'dimensions') {
-    if (options.targetWidth && options.targetHeight) {
-      if (options.maintainAspectRatio) {
-        const ratio = Math.min(options.targetWidth / sourceWidth, options.targetHeight / sourceHeight);
-        targetWidth = Math.max(1, Math.round(sourceWidth * ratio));
-        targetHeight = Math.max(1, Math.round(sourceHeight * ratio));
-      } else {
-        targetWidth = options.targetWidth;
-        targetHeight = options.targetHeight;
+  let srcW = img.naturalWidth || img.width;
+  let srcH = img.naturalHeight || img.height;
+
+  let drawW = srcW;
+  let drawH = srcH;
+
+  // 1. Social Preset or Resize
+  if (options.socialPresetWidth && options.socialPresetHeight) {
+    drawW = options.socialPresetWidth;
+    drawH = options.socialPresetHeight;
+  } else if (options.width || options.height) {
+    if (options.maintainAspectRatio) {
+      if (options.width && options.height) {
+        const scale = Math.min(options.width / srcW, options.height / srcH);
+        drawW = Math.round(srcW * scale);
+        drawH = Math.round(srcH * scale);
+      } else if (options.width) {
+        drawW = options.width;
+        drawH = Math.round((srcH / srcW) * options.width);
+      } else if (options.height) {
+        drawH = options.height;
+        drawW = Math.round((srcW / srcH) * options.height);
       }
-    } else if (options.targetWidth) {
-      const ratio = options.targetWidth / sourceWidth;
-      targetWidth = options.targetWidth;
-      targetHeight = Math.max(1, Math.round(sourceHeight * ratio));
-    } else if (options.targetHeight) {
-      const ratio = options.targetHeight / sourceHeight;
-      targetHeight = options.targetHeight;
-      targetWidth = Math.max(1, Math.round(sourceWidth * ratio));
+    } else {
+      drawW = options.width || srcW;
+      drawH = options.height || srcH;
     }
   }
 
-  // Handle rotation orientation
-  const rotation = (options.rotation || 0) % 360;
-  const isRotated90or270 = rotation === 90 || rotation === 270;
-  const canvasWidth = isRotated90or270 ? targetHeight : targetWidth;
-  const canvasHeight = isRotated90or270 ? targetWidth : targetHeight;
-
-  const canvas = document.createElement('canvas');
-  canvas.width = canvasWidth;
-  canvas.height = canvasHeight;
-
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Could not get 2D canvas context');
-
-  // Fill background with solid white if converting from transparent format to JPEG
-  const targetMime = options.targetFormat || 'image/jpeg';
-  if (targetMime === 'image/jpeg') {
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+  // 2. Max Dimension Cap
+  if (options.maxWidth && drawW > options.maxWidth) {
+    drawH = Math.round((drawH / drawW) * options.maxWidth);
+    drawW = options.maxWidth;
+  }
+  if (options.maxHeight && drawH > options.maxHeight) {
+    drawW = Math.round((drawW / drawH) * options.maxHeight);
+    drawH = options.maxHeight;
   }
 
+  // Handle Rotation Dimensions
+  const angle = options.rotationAngle || 0;
+  if (angle === 90 || angle === 270) {
+    canvas.width = drawH;
+    canvas.height = drawW;
+  } else {
+    canvas.width = drawW;
+    canvas.height = drawH;
+  }
+
+  // Apply Rotation & Flip
   ctx.save();
-  ctx.translate(canvasWidth / 2, canvasHeight / 2);
-
-  if (rotation !== 0) {
-    ctx.rotate((rotation * Math.PI) / 180);
+  if (angle === 90) {
+    ctx.translate(canvas.width, 0);
+    ctx.rotate((90 * Math.PI) / 180);
+  } else if (angle === 180) {
+    ctx.translate(canvas.width, canvas.height);
+    ctx.rotate((180 * Math.PI) / 180);
+  } else if (angle === 270) {
+    ctx.translate(0, canvas.height);
+    ctx.rotate((270 * Math.PI) / 180);
   }
 
-  const scaleX = options.flipHorizontal ? -1 : 1;
-  const scaleY = options.flipVertical ? -1 : 1;
-  ctx.scale(scaleX, scaleY);
+  if (options.flipHorizontal || options.flipVertical) {
+    ctx.translate(drawW / 2, drawH / 2);
+    ctx.scale(options.flipHorizontal ? -1 : 1, options.flipVertical ? -1 : 1);
+    ctx.translate(-drawW / 2, -drawH / 2);
+  }
 
-  ctx.drawImage(
-    img,
-    sourceX,
-    sourceY,
-    sourceWidth,
-    sourceHeight,
-    -targetWidth / 2,
-    -targetHeight / 2,
-    targetWidth,
-    targetHeight
-  );
+  // Handle Crop Box if provided
+  if (options.cropBox) {
+    const { x, y, width: cW, height: cH } = options.cropBox;
+    canvas.width = cW;
+    canvas.height = cH;
+    ctx.drawImage(img, x, y, cW, cH, 0, 0, cW, cH);
+  } else {
+    ctx.drawImage(img, 0, 0, drawW, drawH);
+  }
   ctx.restore();
 
-  const quality = options.quality !== undefined ? Math.min(1, Math.max(0.05, options.quality)) : 0.85;
+  // Apply Filters (Grayscale, Sepia, Invert, Brightness, Contrast, Blur)
+  if (options.grayscale || options.sepia || options.invert || options.brightness !== undefined || options.contrast !== undefined) {
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imgData.data;
+
+    const bVal = options.brightness || 0; // -100 to 100
+    const cVal = options.contrast || 0; // -100 to 100
+    const factor = (259 * (cVal + 255)) / (255 * (259 - cVal));
+
+    for (let i = 0; i < data.length; i += 4) {
+      let r = data[i];
+      let g = data[i + 1];
+      let b = data[i + 2];
+
+      // Grayscale
+      if (options.grayscale) {
+        const avg = 0.299 * r + 0.587 * g + 0.114 * b;
+        r = avg;
+        g = avg;
+        b = avg;
+      }
+
+      // Sepia
+      if (options.sepia) {
+        const sr = 0.393 * r + 0.769 * g + 0.189 * b;
+        const sg = 0.349 * r + 0.686 * g + 0.168 * b;
+        const sb = 0.272 * r + 0.534 * g + 0.131 * b;
+        r = sr;
+        g = sg;
+        b = sb;
+      }
+
+      // Invert
+      if (options.invert) {
+        r = 255 - r;
+        g = 255 - g;
+        b = 255 - b;
+      }
+
+      // Brightness
+      if (bVal !== 0) {
+        r += bVal;
+        g += bVal;
+        b += bVal;
+      }
+
+      // Contrast
+      if (cVal !== 0) {
+        r = factor * (r - 128) + 128;
+        g = factor * (g - 128) + 128;
+        b = factor * (b - 128) + 128;
+      }
+
+      data[i] = Math.min(255, Math.max(0, r));
+      data[i + 1] = Math.min(255, Math.max(0, g));
+      data[i + 2] = Math.min(255, Math.max(0, b));
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+  }
+
+  // Blur Filter
+  if (options.blurRadius && options.blurRadius > 0) {
+    ctx.filter = `blur(${options.blurRadius}px)`;
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    const tempCtx = tempCanvas.getContext('2d')!;
+    tempCtx.drawImage(canvas, 0, 0);
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(tempCanvas, 0, 0);
+    ctx.filter = 'none';
+  }
+
+  // Watermark
+  if (options.watermarkText) {
+    ctx.save();
+    const fontSize = options.watermarkFontSize || Math.max(16, Math.round(canvas.width / 20));
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.fillStyle = `rgba(255, 255, 255, ${options.watermarkOpacity ?? 0.7})`;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+    ctx.shadowBlur = 4;
+
+    const textMetrics = ctx.measureText(options.watermarkText);
+    const textWidth = textMetrics.width;
+
+    let wx = (canvas.width - textWidth) / 2;
+    let wy = canvas.height / 2 + fontSize / 3;
+
+    const pos = options.watermarkPosition || 'center';
+    const padding = 20;
+
+    if (pos === 'top-left') {
+      wx = padding;
+      wy = padding + fontSize;
+    } else if (pos === 'top-right') {
+      wx = canvas.width - textWidth - padding;
+      wy = padding + fontSize;
+    } else if (pos === 'bottom-left') {
+      wx = padding;
+      wy = canvas.height - padding;
+    } else if (pos === 'bottom-right') {
+      wx = canvas.width - textWidth - padding;
+      wy = canvas.height - padding;
+    }
+
+    if (options.watermarkRotation) {
+      ctx.translate(wx + textWidth / 2, wy - fontSize / 3);
+      ctx.rotate((options.watermarkRotation * Math.PI) / 180);
+      ctx.fillText(options.watermarkText, -textWidth / 2, fontSize / 3);
+    } else {
+      ctx.fillText(options.watermarkText, wx, wy);
+    }
+    ctx.restore();
+  }
+
+  // Format selection
+  let mimeType = options.targetFormat || (file.type as any) || 'image/jpeg';
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
+    mimeType = 'image/jpeg';
+  }
+
+  const quality = options.quality !== undefined ? options.quality : 0.85;
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => {
         if (!blob) {
-          reject(new Error('Canvas blob generation failed'));
+          reject(new Error('Failed to generate image binary output.'));
           return;
         }
-        const dataUrl = canvas.toDataURL(targetMime, quality);
-        const reductionPercentage = originalSizeBytes > 0
-          ? Math.max(0, Math.round((1 - blob.size / originalSizeBytes) * 100))
-          : 0;
-
         resolve({
           blob,
-          dataUrl,
-          width: canvasWidth,
-          height: canvasHeight,
-          sizeBytes: blob.size,
-          originalSizeBytes,
-          reductionPercentage,
+          width: canvas.width,
+          height: canvas.height,
+          mimeType,
         });
       },
-      targetMime,
+      mimeType,
       quality
     );
   });
-}
-
-/**
- * Bundle multiple processed files into a single ZIP archive
- */
-export async function bundleIntoZip(
-  files: { name: string; blobOrBuffer: Blob | ArrayBuffer | Uint8Array }[]
-): Promise<Blob> {
-  const zip = new JSZip();
-  
-  files.forEach((f) => {
-    zip.file(f.name, f.blobOrBuffer);
-  });
-
-  return await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
 }

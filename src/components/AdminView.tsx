@@ -13,6 +13,7 @@ import {
   Zap, 
   FileCheck 
 } from 'lucide-react';
+import { getApiUrl } from '../lib/api';
 
 export const AdminView: React.FC = () => {
   const [stats, setStats] = useState<any>({
@@ -44,7 +45,7 @@ export const AdminView: React.FC = () => {
   const fetchStats = async () => {
     setIsRefreshing(true);
     try {
-      const res = await fetch('/api/admin/stats');
+      const res = await fetch(getApiUrl('/api/admin/stats'));
       if (res.ok) {
         const data = await res.json();
         setStats(data);

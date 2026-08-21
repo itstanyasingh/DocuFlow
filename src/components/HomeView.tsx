@@ -152,18 +152,18 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
   // Top 12 Popular tools
   const popularToolIds = [
-    'pdf-to-word',
-    'word-to-pdf',
     'merge-pdf',
     'split-pdf',
-    'compress-pdf',
+    'extract-pdf-pages',
     'pdf-to-jpg',
     'jpg-to-pdf',
-    'pdf-to-excel',
-    'excel-to-pdf',
-    'pdf-ocr',
-    'edit-pdf',
-    'protect-pdf',
+    'compress-image',
+    'resize-image',
+    'convert-image',
+    'docx-preview',
+    'excel-viewer',
+    'word-counter',
+    'json-formatter',
   ];
   const popularTools = useMemo(() => {
     return popularToolIds.map(id => TOOLS.find(t => t.id === id)).filter(Boolean) as ToolDefinition[];
@@ -279,9 +279,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
             {/* Hero Trust Strip */}
             <div className="mt-6 pt-5 border-t border-slate-100 flex flex-wrap items-center justify-center gap-6 text-xs text-slate-500 font-medium">
               <span className="flex items-center gap-1.5"><span className="text-green-600 font-bold">✓</span> No software installation</span>
-              <span className="flex items-center gap-1.5"><span className="text-green-600 font-bold">✓</span> 100+ useful tools</span>
+              <span className="flex items-center gap-1.5"><span className="text-green-600 font-bold">✓</span> Fast browser processing</span>
               <span className="flex items-center gap-1.5"><span className="text-green-600 font-bold">✓</span> Works on desktop & mobile</span>
-              <span className="flex items-center gap-1.5"><span className="text-green-600 font-bold">✓</span> Simple file processing</span>
+              <span className="flex items-center gap-1.5"><span className="text-green-600 font-bold">✓</span> Simple file utilities</span>
             </div>
           </div>
 
@@ -305,7 +305,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 href="#all-tools-directory"
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline"
               >
-                <span>View all 80+ tools</span>
+                <span>View all tools</span>
                 <ArrowDown className="w-3.5 h-3.5" />
               </a>
             </div>
@@ -406,48 +406,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
         </section>
       )}
 
-      {/* 2.6 What do you want to do? Section */}
-      {selectedCategory === 'all' && searchQuery === '' && (
-        <section className="py-10 border-b border-slate-200 bg-white">
-          <div className="max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="mb-6">
-              <h2 className="text-base font-bold text-slate-900">What do you want to do?</h2>
-              <p className="text-xs text-slate-500">Quick discovery by action category</p>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              {[
-                { label: 'CONVERT', toolIds: ['pdf-to-word', 'word-to-pdf', 'pdf-to-excel', 'pdf-to-jpg'] },
-                { label: 'ORGANIZE', toolIds: ['merge-pdf', 'split-pdf', 'extract-pages', 'delete-pages'] },
-                { label: 'EDIT', toolIds: ['edit-pdf', 'add-text-pdf', 'add-image-pdf', 'watermark-pdf'] },
-                { label: 'OPTIMIZE', toolIds: ['compress-pdf', 'compress-image', 'resize-image'] },
-                { label: 'SECURE', toolIds: ['protect-pdf', 'sign-pdf', 'redact-pdf'] },
-              ].map((group) => (
-                <div key={group.label} className="bg-slate-50/70 border border-slate-200/80 rounded-xl p-4">
-                  <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-3 pb-2 border-b border-slate-200">
-                    {group.label}
-                  </div>
-                  <div className="space-y-2">
-                    {group.toolIds.map((id) => {
-                      const t = TOOLS.find(tool => tool.id === id);
-                      if (!t) return null;
-                      return (
-                        <button
-                          key={t.id}
-                          onClick={() => onSelectTool(t)}
-                          className="w-full text-left text-xs font-semibold text-slate-700 hover:text-blue-600 truncate block py-1 cursor-pointer transition-colors"
-                        >
-                          {t.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
 
       {/* 3. Comprehensive All Tools Directory */}
       <section id="all-tools-directory" className="py-10">
